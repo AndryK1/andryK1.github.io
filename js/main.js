@@ -839,7 +839,7 @@
       const t = e.target;
       if (t !== lastTarget) {
         lastTarget = t;
-        hot = !!(t && t.closest && t.closest('a, button'));
+        hot = !!(t && t.closest && t.closest('a, button, .flip'));
       }
       placeHead();
       if (!raf) raf = requestAnimationFrame(frame);
@@ -877,6 +877,131 @@
     $$('[data-pause-offscreen]').forEach((el) => io.observe(el));
   }
 
+  /* =======================================================================
+     3D-карточка с фото
+     В покое стоит ровно. Мышь над карточкой слегка наклоняет её, зажатой
+     кнопкой (или пальцем) её можно крутить, щелчок или Enter переворачивают.
+     Отпустили — пружина доводит до ближайшей стороны; резкий бросок
+     переворачивает. Кадры считаются только пока карточка движется.
+     ======================================================================= */
+  function initFlipCard() {
+    const wrap = document.getElementById('photo-flip');
+    if (!wrap) return;
+    const card = wrap.querySelector('.flip__card');
+    const front = wrap.querySelector('.photo-card');
+    const back = wrap.querySelector('.flip__back');
+
+    const TILT = 8;          // наклон при наведении, градусы
+    const DRAG_Y = 0.55;     // градусов на пиксель по горизонтали
+    const DRAG_X = 0.35;     // и по вертикали
+    const LIMIT_X = 38;      // вверх-вниз далеко не заваливаем — текст сзади не встанет вверх ногами
+    const K = 160, C = 17;   // жёсткость и вязкость пружины (лёгкий «отскок»)
+    const RAD = Math.PI / 180;
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+    const hoverable = window.matchMedia('(hover: hover)').matches;
+
+    let rx = 0, ry = 0, vx = 0, vy = 0, tx = 0, ty = 0, base = 0;
+    let drag = null, raf = 0, last = 0, showingBack = false;
+
+    function render() {
+      card.style.transform = `rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg)`;
+      // блик: смещается против наклона и тем ярче, чем сильнее наклон
+      let off = ((ry % 180) + 180) % 180;
+      if (off > 90) off -= 180;
+      card.style.setProperty('--gx', (50 - Math.sin(off * RAD) * 110).toFixed(1) + '%');
+      card.style.setProperty('--gy', (50 + Math.sin(rx * RAD) * 110).toFixed(1) + '%');
+      card.style.setProperty('--ga', Math.min(1, (Math.abs(off) + Math.abs(rx)) / 22).toFixed(2));
+      const b = Math.cos(ry * RAD) < 0;
+      if (b !== showingBack) {
+        showingBack = b;
+        front.setAttribute('aria-hidden', b ? 'true' : 'false');
+        back.setAttribute('aria-hidden', b ? 'false' : 'true');
+      }
+    }
+
+    function tick(now) {
+      const dt = Math.min(0.032, (now - last) / 1000 || 0.016);
+      last = now;
+      vx += ((tx - rx) * K - vx * C) * dt;
+      vy += ((ty - ry) * K - vy * C) * dt;
+      rx += vx * dt;
+      ry += vy * dt;
+      if (Math.abs(tx - rx) + Math.abs(ty - ry) < 0.05 && Math.abs(vx) + Math.abs(vy) < 0.5) {
+        rx = tx; ry = ty; vx = vy = 0;
+        render();
+        raf = 0;
+        return;
+      }
+      render();
+      raf = requestAnimationFrame(tick);
+    }
+    function settle() {
+      if (!raf && !drag) { last = performance.now(); raf = requestAnimationFrame(tick); }
+    }
+    function stop() { cancelAnimationFrame(raf); raf = 0; }
+    function flip() { base += 180; tx = 0; ty = base; settle(); }
+
+    wrap.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      stop();
+      vx = vy = 0;
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, rx, ry, t: e.timeStamp, vX: 0, vY: 0, moved: false };
+      try { wrap.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      wrap.classList.add('is-grabbing');
+    });
+
+    wrap.addEventListener('pointermove', (e) => {
+      if (drag) {
+        if (e.pointerId !== drag.id) return;
+        const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+        if (!drag.moved && Math.hypot(dx, dy) > 4) drag.moved = true;
+        const nry = drag.ry + dx * DRAG_Y;
+        const nrx = clamp(drag.rx - dy * DRAG_X, -LIMIT_X, LIMIT_X);
+        const dt = Math.max(1, e.timeStamp - drag.t);
+        drag.vY = drag.vY * 0.6 + ((nry - ry) / dt) * 1000 * 0.4;   // скорость, °/с
+        drag.vX = drag.vX * 0.6 + ((nrx - rx) / dt) * 1000 * 0.4;
+        drag.t = e.timeStamp;
+        rx = nrx; ry = nry;
+        render();
+        return;
+      }
+      if (hoverable && e.pointerType === 'mouse') {
+        const r = wrap.getBoundingClientRect();
+        const px = (e.clientX - r.left) / r.width - 0.5;
+        const py = (e.clientY - r.top) / r.height - 0.5;
+        tx = clamp(-py, -0.5, 0.5) * 2 * TILT;
+        ty = base + clamp(px, -0.5, 0.5) * 2 * TILT;
+        settle();
+      }
+    });
+
+    function release(e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      const d = drag;
+      drag = null;
+      wrap.classList.remove('is-grabbing');
+      if (!d.moved) {
+        if (e.type === 'pointerup') flip(); else { tx = 0; ty = base; settle(); }
+        return;
+      }
+      // если перед отпусканием палец/мышь замерли — бросать нечего
+      const still = e.timeStamp - d.t > 90;
+      const vY = still ? 0 : d.vY, vX = still ? 0 : d.vX;
+      base = Math.round((ry + clamp(vY * 0.12, -200, 200)) / 180) * 180;
+      vy = clamp(vY, -1500, 1500) * 0.5;
+      vx = vX * 0.3;
+      tx = 0; ty = base;
+      settle();
+    }
+    wrap.addEventListener('pointerup', release);
+    wrap.addEventListener('pointercancel', release);
+    wrap.addEventListener('pointerleave', () => { if (!drag) { tx = 0; ty = base; settle(); } });
+    wrap.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); }
+    });
+    render();
+  }
+
   /* ---------- старт ---------- */
   initLiteMode();
   initSpace();
@@ -886,6 +1011,7 @@
   initJourneyPath();
   initProjects();
   initDocs();
+  initFlipCard();
   initCursor();
   initOffscreenPause();
   initFrameGuard();
