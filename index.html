@@ -153,16 +153,38 @@
           <span class="sat sat--5"></span>
         </div>
 
-        <div class="photo-card fu" style="--d: .4s">
-          <img class="photo-card__img" src="images/andrey.jpg" alt="Андрей Хлоповских" width="270" height="390" draggable="false" fetchpriority="high" decoding="async">
-          <div class="photo-card__badge">
-            <div class="photo-card__who">
-              <span class="photo-card__name">Андрей</span>
-              <span class="photo-card__meta mono">Воронеж · @Andry1372</span>
+        <!-- 3D-карточка: в покое висит как обычно; мышью или пальцем её можно крутить,
+             щелчок или Enter переворачивает (логика — initFlipCard в main.js) -->
+        <div class="flip fu" id="photo-flip" style="--d: .4s" tabindex="0" role="button" aria-label="Карточка с фото — нажмите, чтобы перевернуть">
+          <div class="flip__card">
+            <div class="flip__face photo-card">
+              <img class="photo-card__img" src="images/andrey.jpg" alt="Андрей Хлоповских" width="270" height="390" draggable="false" fetchpriority="high" decoding="async">
+              <div class="photo-card__badge">
+                <div class="photo-card__who">
+                  <span class="photo-card__name">Андрей</span>
+                  <span class="photo-card__meta mono">Воронеж · @Andry1372</span>
+                </div>
+                <span class="photo-card__icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>
+                </span>
+              </div>
+              <span class="flip__glare" aria-hidden="true"></span>
             </div>
-            <span class="photo-card__icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>
-            </span>
+            <div class="flip__face flip__back" aria-hidden="true">
+              <div class="flip-back__top">
+                <span class="flip-back__file mono">Andrey.kt</span>
+              </div>
+              <pre class="flip-back__code mono"><span class="k">object</span> <span class="t">Andrey</span> : <span class="t">Developer</span> {
+  <span class="k">val</span> city = <span class="s">"Воронеж"</span>
+  <span class="k">val</span> role = <span class="s">"Android"</span>
+  <span class="k">val</span> experience = <span class="s">"2,5 года"</span>
+  <span class="k">val</span> stack = listOf(
+    <span class="s">"Kotlin"</span>, <span class="s">"Compose"</span>,
+    <span class="s">"Coroutines"</span>, <span class="s">"Room"</span>
+  )
+}</pre>
+              <span class="flip__glare" aria-hidden="true"></span>
+            </div>
           </div>
         </div>
 
